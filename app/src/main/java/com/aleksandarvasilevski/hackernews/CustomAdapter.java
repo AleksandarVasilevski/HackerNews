@@ -23,17 +23,13 @@ public class CustomAdapter extends ArrayAdapter<News> {
         View listItemView = convertView;
         if (listItemView == null) {
             listItemView = LayoutInflater.from(getContext()).inflate(
-                    R.layout.hacker_news_list_item, parent, false);
-
+                    R.layout.news_list_item, parent, false);
         }
 
         News currentNews = getItem(position);
 
         TextView titleTextView = (TextView)listItemView.findViewById(R.id.titleTextView);
         titleTextView.setText(currentNews.getTitle());
-
-        TextView descriptionTextView = (TextView)listItemView.findViewById(R.id.descriptionTextView);
-        descriptionTextView.setText(currentNews.getDescription());
 
         return listItemView;
     }

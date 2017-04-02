@@ -5,40 +5,111 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.text.TextUtils;
 import android.util.Log;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Helper methods related to requesting and receiving news data from Hacker News.
  */
 public final class QueryUtils {
 
-    /** Sample JSON response for a Hacker News query */
-    private static final String SAMPLE_JSON_RESPONSE = "{\"status\":\"ok\",\"source\":\"hacker-news\",\"sortBy\":\"top\",\"articles\":[{\"author\":null,\"title\":\"Setting the Record Straight: containers vs. Zones vs. Jails vs. VMs\",\"description\":\"Design differences of containers, Zones, Jails and VMs.\",\"url\":\"https://blog.jessfraz.com/post/containers-zones-jails-vms/\",\"urlToImage\":\"/img/share.png\",\"publishedAt\":null},{\"author\":\"{        map[]}\",\"title\":\"Flex\",\"description\":\"Home page of the Flex team at YC Research HARC\",\"url\":\"https://harc.ycr.org/flex/\",\"urlToImage\":null,\"publishedAt\":null},{\"author\":\"Austin Cheney\",\"title\":\"Fastest diff algorithm – only 3 passes through the data with minimal logic\",\"description\":\"Pretty Diff tool can minify, beautify (pretty-print), or diff between minified and beautified code. This tool can even beautify and minify HTML.\",\"url\":\"http://prettydiff.com/overview.xhtml\",\"urlToImage\":null,\"publishedAt\":null},{\"author\":\"\",\"title\":\"Vivaldi Makes History\",\"description\":\"Introducing the new Vivaldi History – a powerful tool that lets you explore your browsing habits and finding previously visited web pages like never before.\",\"url\":\"https://vivaldi.com/blog/vivaldi-makes-history/\",\"urlToImage\":\"https://vivaldi.com/wp-content/uploads/2017/03/vivaldi-1.8-history-1.jpg\",\"publishedAt\":\"2017-03-29T09:26:31Z\"},{\"author\":null,\"title\":\"M. I. Jordan: An Introduction to Probabilistic Graphical Models\",\"description\":null,\"url\":\"https://people.eecs.berkeley.edu/~jordan/prelims/\",\"urlToImage\":null,\"publishedAt\":null},{\"author\":null,\"title\":\"f.lux vs. Night Shift in macOS 10.12.4\",\"description\":\"I have two things to say about Apple's copy of f.lux. #1 Amount Night Shift's defaults are pretty gentle, and for most people they won't reduce the impact of a screen by very much. Here's what Night Shift does before bedtime:  And here's what f.lux does b...\",\"url\":\"https://forum.justgetflux.com/topic/3655/f-lux-vs-night-shift-in-macos-10-12-4/8\",\"urlToImage\":\"https://forum.justgetflux.com/uploads/profile/3-profileimg.png\",\"publishedAt\":\"2017-03-29T02:13:56.889Z\"},{\"author\":null,\"title\":\"How to write Common Lisp in 2017 – an initiation manual\",\"description\":null,\"url\":\"http://articulate-lisp.com\",\"urlToImage\":null,\"publishedAt\":null},{\"author\":\"Kyle Halladay\",\"title\":\"Getting started with gameboy advance development\",\"description\":\"I build shaders, renderers, games, and other stuff that's fun to stare at.\",\"url\":\"http://kylehalladay.com/blog/tutorial/2017/03/28/GBA-By-Example-1.html\",\"urlToImage\":null,\"publishedAt\":null},{\"author\":null,\"title\":\"Deep Learning: mathematics and neuroscience [pdf]\",\"description\":null,\"url\":\"https://cbmm.mit.edu/sites/default/files/publications/Deep%20Learning-%20mathematics%20and%20neuroscience.pdf\",\"urlToImage\":null,\"publishedAt\":null},{\"author\":null,\"title\":\"Beej's Guide to Network Programming\",\"description\":null,\"url\":\"http://beej.us/guide/bgnet/\",\"urlToImage\":null,\"publishedAt\":null}]}";
+    public static final String LOG_TAG = QueryUtils.class.getSimpleName();
 
-    /**
-     * Create a private constructor because no one should ever create a {@link QueryUtils} object.
-     * This class is only meant to hold static variables and methods, which can be accessed
-     * directly from the class name QueryUtils (and an object instance of QueryUtils is not needed).
-     */
     private QueryUtils() {
+
     }
 
-    /**
-     * Return a list of {@link News} objects that has been built up from
-     * parsing a JSON response.
-     */
-    public static ArrayList<News> extractNewsList() {
-
-        // Create an empty ArrayList that we can start adding news to
-        ArrayList<News> newsList = new ArrayList<>();
-
-        // Try to parse the SAMPLE_JSON_RESPONSE. If there's a problem with the way the JSON
-        // is formatted, a JSONException exception object will be thrown.
-        // Catch the exception so the app doesn't crash, and print the error message to the logs.
+    public static List<News> fetchNewsJson(String requestUrl) {
+        URL url = createUrl(requestUrl);
+        String jsonResponse = null;
         try {
+            jsonResponse = makeHttpRequest(url);
+        } catch (IOException e) {
+            Log.e(LOG_TAG, "Error in making http request", e);
+        }
 
-            JSONObject baseJsonResponse = new JSONObject(SAMPLE_JSON_RESPONSE);
+        List<News> result = extractNews(jsonResponse);
+        return result;
+    }
+
+    private static URL createUrl(String stringUrl) {
+        URL url = null;
+        try {
+            url = new URL(stringUrl);
+        }catch (MalformedURLException e){
+            Log.e(LOG_TAG,"Error in Creating URL",e);
+        }
+        return url;
+    }
+
+    private static String makeHttpRequest(URL url) throws IOException{
+        String jsonResponse = "";
+        if (url == null){
+            return jsonResponse;
+        }
+
+        HttpURLConnection urlConnection = null;
+        InputStream inputStream = null;
+        try {
+            urlConnection = (HttpURLConnection) url.openConnection();
+            urlConnection.setReadTimeout(10000 /* milliseconds */);
+            urlConnection.setConnectTimeout(15000 /* milliseconds */);
+            urlConnection.setRequestMethod("GET");
+            urlConnection.connect();
+
+            if (urlConnection.getResponseCode() == 200) {
+                inputStream = urlConnection.getInputStream();
+                jsonResponse = readFromStream(inputStream);
+            } else {
+                Log.e(LOG_TAG, "Error in connection!! Bad Response ");
+            }
+        }catch (IOException e){
+            Log.e(LOG_TAG, "Problem retrieving the earthquake JSON results.", e);
+        }finally {
+            if (urlConnection != null){
+                urlConnection.disconnect();
+            }
+            if (inputStream != null){
+                inputStream.close();
+            }
+        }
+
+        return jsonResponse;
+    }
+
+    private static String readFromStream(InputStream inputStream)throws IOException{
+        StringBuilder output = new StringBuilder();
+        if (inputStream != null){
+            InputStreamReader inputStreamReader = new InputStreamReader(inputStream, Charset.forName("UTF-8"));
+            BufferedReader reader = new BufferedReader(inputStreamReader);
+            String line = reader.readLine();
+            while (line != null){
+                output.append(line);
+                line = reader.readLine();
+            }
+        }
+
+        return output.toString();
+    }
+
+    private static List<News> extractNews(String newsJSON) {
+        if (TextUtils.isEmpty(newsJSON)) {
+            return null;
+        }
+        ArrayList<News> newses = new ArrayList<>();
+        try {
+            JSONObject baseJsonResponse = new JSONObject(newsJSON);
             JSONArray newsArray = baseJsonResponse.getJSONArray("articles");
 
             for (int i = 0; i < newsArray.length(); i++) {
@@ -46,20 +117,15 @@ public final class QueryUtils {
                 JSONObject currentNews = newsArray.getJSONObject(i);
                 String title = currentNews.getString("title");
                 String description = currentNews.getString("description");
+                String source = currentNews.getString("url");
 
-                News news = new News(title, description);
-                newsList.add(news);
+                News news = new News(title, description, source);
+                newses.add(news);
             }
-
         } catch (JSONException e) {
-            // If an error is thrown when executing any of the above statements in the "try" block,
-            // catch the exception here, so the app doesn't crash. Print a log message
-            // with the message from the exception.
-            Log.e("QueryUtils", "Problem parsing the earthquake JSON results", e);
+            Log.e(LOG_TAG, "Error in fetching data", e);
         }
-
-        // Return the list of news
-        return newsList;
+        return newses;
     }
 
 }

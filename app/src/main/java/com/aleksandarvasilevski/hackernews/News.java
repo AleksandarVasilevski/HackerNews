@@ -6,10 +6,12 @@ public class News {
 
     private String mTitle;
     private String mDescription;
+    private String mSource;
 
-    public News(String title, String description){
+    public News(String title, String description, String source){
         mTitle = title;
         mDescription = description;
+        mSource = source;
     }
 
     public String getTitle() {
@@ -19,4 +21,6 @@ public class News {
     public String getDescription() {
         return mDescription;
     }
+
+    public String getSource() { return mSource; }
 }
